@@ -1,60 +1,18 @@
-import argparse
-import json
+from parser import create_parser
+from file_loader import LoadingFile
 import re
 import string
 from nltk.stem import PorterStemmer
-
-
-
-class LoadingFile():
-    def __init__(self, file_path: str):
-        self.file_path = file_path
-        self.loaded_data = self.load_file()
-        self.stop_words = self.get_stop_words()
-
-
-    def get_stop_words(self):
-        try:
-            with open('data/stopwords.txt', 'r') as f:
-                f_data = f.read()
-                return set(f_data.splitlines())
-        except Exception as e:
-            print(e)
-            exit(1)
-
-
-    def load_file(self):
-        try:
-            with open(self.file_path, 'r') as f:
-                return json.load(f)
-        except Exception as e :
-            print(e)
-            exit(1)
-
-
-def CreateParser():
-    parser = argparse.ArgumentParser(description="Keyword Search CLI")
-
-    parser.add_argument('--data', default='data/movies.json')
-    first_subparser = parser.add_subparsers(dest="command")
-
-    search =  first_subparser.add_parser('search')
-    search.add_argument('query')
-
-    args = parser.parse_args()
-
-    if not args.command:
-        parser.print_help()
-        exit(1)
-    else:
-        return (parser, args)
-
+from functools import lru_cache
+import pickle
+from pathlib import Path
 
 
 class KeywordSearch():
     def __init__(self, args):
         self.loaded_file = LoadingFile(args.data)
         self.stemmer = PorterStemmer()
+        self._stem = lru_cache(maxsize=None)(self.stemmer.stem)
 
 
     @staticmethod
@@ -66,12 +24,8 @@ class KeywordSearch():
 
     def tokenizate_text(self, text: str) -> str:
         text = KeywordSearch.preprocess_text(text)
-        tokenizated_text = [self.stemmer.stem(token) for token in text.split()]
-        valid_tokens = []
-        for token in tokenizated_text:
-            if token and token not in self.loaded_file.stop_words:
-                valid_tokens.append(token)
-        return valid_tokens
+        tokens = (self._stem(t) for t in text.split())
+        return [t for t in tokens if t and t not in self.loaded_file.stop_words]
 
 
     def search_for_query(self, query):
@@ -91,12 +45,75 @@ class KeywordSearch():
             print(f"{i + 1}. {title}")
         return result
 
+
+class InvertedIndex(KeywordSearch):
+    def __init__(self, args):
+        super().__init__(args)
+        Path('cache').mkdir(parents=True, exist_ok=True)
+        self.index = {}
+        self.docmap = {}
+        self.saved_index = 'cache/index.pkl'
+        self.saved_docmap = 'cache/docmap.pkl'
+        self.file_path = args.data
+        self.loaded_file = None
+    
+    def __add_document(self, doc_id, text):
+        tokens = self.tokenizate_text(text)
+        for token in tokens:
+            if self.index.get(token):
+                self.index[token].add(doc_id)
+            else:
+                self.index[token] = set()
+                self.index[token].add(doc_id)
+
+    def get_documents(self, term):
+        ids = self.index[term]
+        if ids:
+            return sorted(ids)
+
+    def indexing(self):
+        for doc_id, text in self.docmap.items():
+            self.__add_document(doc_id, text)
+    
+
+            
+    def build(self):
+        """It should call load_movies(), then add each movie to both the index and the docmap.
+        Use each movie's existing id as its document ID. """
+        self.loaded_file = LoadingFile(self.file_path)
+        movies = self.loaded_file.loaded_data['movies']
+        
+        self.docmap = {m['id']: f"{m['title']} {m['description']}" for m in movies}
+        self.indexing()
+        self.save()
+
+
+    def save(self):
+        try:
+            with open(self.saved_docmap, 'wb') as file:
+                pickle.dump(self.docmap, file)
+
+            with open(self.saved_index, 'wb') as file:
+                pickle.dump(self.index, file)
+        except Exception as e:
+            print(e)
+            exit(1)
+
+
+
+
 def main() -> None:
-    parser, args = CreateParser()
+    parser, args = create_parser()
+    if args.command == "build":
+        invert  = InvertedIndex(args)
+        invert.build()
+        docs = invert.index['merida']
+        print(f"First document for token 'merida' = {docs}")
+    elif args.command == "search":
+        search = KeywordSearch(args)
+        search.search_for_query(args.query)
 
-    search = KeywordSearch(args)
 
-    search.search_for_query(args.query)
 
 
 if __name__ == "__main__":
