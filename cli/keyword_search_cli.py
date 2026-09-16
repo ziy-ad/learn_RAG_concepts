@@ -47,25 +47,26 @@ class KeywordSearch():
             exit(1)
 
     def search_for_query(self, query):
-        # if not self.cache_data.index or not self.cache_data.docmap: 
         self.load()
-        to_list = self.loaded_file.loaded_data['movies']
-        token_query = self.tokenizate_text(query)
-        result = [list(self.cache_data.index[token]) for token in token_query][0]
+        tokenized_text = self.tokenizate_text(query)
+        result = []
 
+        for token in tokenized_text:
+            extracted_ids = sorted(self.cache_data.index.get(token, set()))
 
-        # for l in to_list:
-        #     temp_title = self.tokenizate_text(l['title'])
-        #     for token in token_query:
-        #         if any(token in title_token for title_token in temp_title):
-        #             result.append(l['title'])
-        #             break
-        # print(len(self.loaded_file.loaded_data['movies']))
-        for id in result:
-            title = list(self.loaded_file.loaded_data['movies'])[id]['title']
-            print(f"{id}. {title}")
-        # return result
+            for id in extracted_ids:
+                if id not in result:
+                    result.append(id)
+                if len(result) >= 5:
+                    break
+            if len(result) >= 5:
+                break
 
+        id_to_title = {m['id']: m['title'] for m in self.loaded_file.loaded_data['movies']}
+        for doc_id in result:
+            print(f"{doc_id}. {id_to_title.get(doc_id, 'Unknown title')}")
+        
+        return result
 
 class InvertedIndex(KeywordSearch):
     def __init__(self, args, cache_data):
