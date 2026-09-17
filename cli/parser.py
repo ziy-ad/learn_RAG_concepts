@@ -9,7 +9,20 @@ def create_parser():
     search =  first_subparser.add_parser('search')
     search.add_argument('query')
 
-    build = first_subparser.add_parser('build')
+    tf = first_subparser.add_parser('tf')
+    tf.add_argument('id')
+    tf.add_argument('term')
+
+    idf = first_subparser.add_parser('idf')
+    idf.add_argument('term')
+
+
+    tfidf = first_subparser.add_parser('tfidf')
+    tfidf.add_argument('id')
+    tfidf.add_argument('term')
+
+
+    first_subparser.add_parser('build')
 
     args = parser.parse_args()
 
