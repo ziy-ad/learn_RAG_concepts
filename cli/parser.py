@@ -10,7 +10,7 @@ def create_parser():
     search.add_argument('query')
 
     tf = first_subparser.add_parser('tf')
-    tf.add_argument('id')
+    tf.add_argument('id', type=int)
     tf.add_argument('term')
 
     idf = first_subparser.add_parser('idf')
@@ -18,8 +18,23 @@ def create_parser():
 
 
     tfidf = first_subparser.add_parser('tfidf')
-    tfidf.add_argument('id')
+    tfidf.add_argument('id', type=int)
     tfidf.add_argument('term')
+
+    bm25_idf_parser = first_subparser.add_parser(
+    "bm25idf", help="Get BM25 IDF score for a given term")
+
+    bm25_idf_parser.add_argument("term", type=str, help="Term to get BM25 IDF score for")
+
+    from keyword_search_cli import BM25_K1
+    bm25_tf_parser = first_subparser.add_parser(
+    "bm25tf", help="Get BM25 TF score for a given document ID and term"
+    )
+    bm25_tf_parser.add_argument("id", type=int, help="Document ID")
+    bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
+    bm25_tf_parser.add_argument(
+        "k1", type=float, nargs="?", default=BM25_K1, help="Tunable BM25 K1 parameter"
+    )
 
 
     first_subparser.add_parser('build')

@@ -9,6 +9,9 @@ from pathlib import Path
 from collections import Counter
 import math
 
+
+BM25_K1 = 1.5
+
 class CacheData:
     def __init__(self):
         Path('cache').mkdir(parents=True, exist_ok=True)
@@ -144,7 +147,7 @@ class InvertedIndex(KeywordSearch):
         # print(result)
         return result
 
-    def idf(self, term):
+    def idf(self, term, for_bm25=False):
         self.load()
         tokenized_term = self.tokenizate_term(term)
         count = 0
@@ -155,6 +158,8 @@ class InvertedIndex(KeywordSearch):
             counter = Counter(tokenized_text)
             if counter[tokenized_term] > 0:
                 count += 1
+        if for_bm25:
+            return count
         idf_r = math.log((n + 1) / (count + 1))
         # print(f"Inverse document frequency of '{term}': {idf_r:.2f}")
         return idf_r
@@ -167,30 +172,47 @@ class InvertedIndex(KeywordSearch):
         tf_idf = tf * idf_r
         print(f"TF-IDF score of '{term}' in document '{id}': {tf_idf:.2f}")
 
+    def get_bm25_idf(self, term: str) -> float:
+        df = self.idf(term, for_bm25=True)
+        n = len(self.cache_data.docmap.keys())
+        return math.log((n - df + 0.5) / (df + 0.5) + 1)
+
+    def bm25_idf_command(self, term):
+        self.load()
+        score = self.get_bm25_idf(term)
+        print(f"BM25 IDF score of '{term}': {score:.2f}")
+        return score
+
+    def get_bm25_tf(self, doc_id, term, k1=BM25_K1):
+        tf = self.get_tf(doc_id, term)
+        return (tf * (k1 + 1)) / (tf + k1)
+
+    def bm25_tf_command(self, doc_id, term, k1=BM25_K1):
+        self.load()
+        bm25_tf = self.get_bm25_tf(doc_id, term, k1)
+        print(f"BM25 TF score of '{term}' in document '{doc_id}': {bm25_tf:.2f}")
+        return bm25_tf
 
 
 def main() -> None:
     parser, args = create_parser()
     cache_data = CacheData()
-    invert = None
+    invert = InvertedIndex(args, cache_data)
     if args.command == "build":
-        invert = InvertedIndex(args, cache_data)
         invert.build()
     elif args.command == "search":
         search = KeywordSearch(args, cache_data)
         search.search_for_query(args.query)
     elif args.command == "tf":
-        if not invert:
-            invert = InvertedIndex(args, cache_data)
         invert.get_tf(args.id, args.term)
     elif args.command == "idf":
-        if not invert:
-            invert = InvertedIndex(args, cache_data)
         invert.idf(args.term)
     elif args.command == "tfidf":
-        if not invert:
-            invert = InvertedIndex(args, cache_data)
         invert.tfidf(args.id, args.term)
+    elif args.command == "bm25idf":
+        invert.bm25_idf_command(args.term)
+    elif args.command == "bm25tf":
+        invert.bm25_tf_command(args.id, args.term)
 
 
 
