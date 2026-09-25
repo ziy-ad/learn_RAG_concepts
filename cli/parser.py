@@ -26,7 +26,7 @@ def create_parser():
 
     bm25_idf_parser.add_argument("term", type=str, help="Term to get BM25 IDF score for")
 
-    from keyword_search_cli import BM25_K1
+    from keyword_search_cli import BM25_K1, BM25_B
     bm25_tf_parser = first_subparser.add_parser(
     "bm25tf", help="Get BM25 TF score for a given document ID and term"
     )
@@ -35,6 +35,15 @@ def create_parser():
     bm25_tf_parser.add_argument(
         "k1", type=float, nargs="?", default=BM25_K1, help="Tunable BM25 K1 parameter"
     )
+    bm25_tf_parser.add_argument(
+    "b", type=float, nargs="?", default=BM25_B, help="Tunable BM25 b parameter"
+    )
+
+    bm25search_parser = first_subparser.add_parser(
+    "bm25search", help="Search movies using full BM25 scoring"
+)
+    bm25search_parser.add_argument("query", type=str, help="Search query")
+    bm25search_parser.add_argument("--limit", type=int, default=5)
 
 
     first_subparser.add_parser('build')

@@ -11,13 +11,16 @@ import math
 
 
 BM25_K1 = 1.5
+BM25_B = 0.75
 
 class CacheData:
     def __init__(self):
         Path('cache').mkdir(parents=True, exist_ok=True)
         self.index = {}
         self.docmap = {}
+        self.doc_lengths = {}
         self.term_frequencies = Counter()
+        self.doc_lengths_path = 'cache/doc_lengths.pkl'
         self.saved_frequencies = 'cache/term_frequencies.pkl'
         self.saved_index = 'cache/index.pkl'
         self.saved_docmap = 'cache/docmap.pkl'
@@ -60,6 +63,8 @@ class KeywordSearch():
                     self.cache_data.docmap = pickle.load(f)
             with open(self.cache_data.saved_frequencies, 'rb') as f:
                     self.cache_data.term_frequencies = pickle.load(f)
+            with open(self.cache_data.doc_lengths_path, 'rb') as f:
+                    self.cache_data.doc_lengths = pickle.load(f)
         except Exception as e:
             print(e)
             exit(1)
@@ -93,6 +98,7 @@ class InvertedIndex(KeywordSearch):
     
     def __add_document(self, doc_id, text):
         tokens = self.tokenizate_text(text)
+        raw_length = len(text.split())
         for token in tokens:
             if self.cache_data.index.get(token):
                 self.cache_data.index[token].add(doc_id)
@@ -100,6 +106,7 @@ class InvertedIndex(KeywordSearch):
                 self.cache_data.index[token] = set()
                 self.cache_data.index[token].add(doc_id)
             self.cache_data.term_frequencies[token] += 1
+        self.cache_data.doc_lengths[doc_id] = raw_length
 
     def get_documents(self, term):
         ids = self.cache_data.index[term]
@@ -131,6 +138,8 @@ class InvertedIndex(KeywordSearch):
                 pickle.dump(self.cache_data.index, file)
             with open(self.cache_data.saved_frequencies, 'wb') as file:
                 pickle.dump(self.cache_data.term_frequencies, file)
+            with open(self.cache_data.doc_lengths_path, 'wb') as file:
+                    pickle.dump(self.cache_data.doc_lengths, file)
         except Exception as e:
             print(e)
             exit(1)
@@ -144,7 +153,6 @@ class InvertedIndex(KeywordSearch):
 
         counter = Counter(tokenized_text)
         result = counter[tokenized_term]
-        # print(result)
         return result
 
     def idf(self, term, for_bm25=False):
@@ -183,16 +191,42 @@ class InvertedIndex(KeywordSearch):
         print(f"BM25 IDF score of '{term}': {score:.2f}")
         return score
 
-    def get_bm25_tf(self, doc_id, term, k1=BM25_K1):
+    def get_bm25_tf(self, doc_id, term, B=BM25_B, k1=BM25_K1):
         tf = self.get_tf(doc_id, term)
-        return (tf * (k1 + 1)) / (tf + k1)
+        length_norm = 1 - B + B * (self.cache_data.doc_lengths.get(int(doc_id), 0) / self.__get_avg_doc_length())
+        return (tf * (k1 + 1)) / (tf + k1 * length_norm)
 
-    def bm25_tf_command(self, doc_id, term, k1=BM25_K1):
+    def bm25_tf_command(self, doc_id, term, *, B=BM25_B, k1=BM25_K1):
         self.load()
-        bm25_tf = self.get_bm25_tf(doc_id, term, k1)
+        
+        bm25_tf = self.get_bm25_tf(doc_id, term,B, k1)
         print(f"BM25 TF score of '{term}' in document '{doc_id}': {bm25_tf:.2f}")
         return bm25_tf
 
+    def __get_avg_doc_length(self) -> float:
+        if not self.cache_data.doc_lengths:
+            return 0.0
+        return sum(self.cache_data.doc_lengths.values()) / len(self.cache_data.doc_lengths)
+    
+
+    def bm25(self, doc_id, term):
+        tf = self.get_bm25_tf(doc_id, term)
+        idf = self.get_bm25_idf(term)
+        return tf * idf
+    
+
+    def bm25_search(self, query, limit):
+        self.load()
+        tokenized_query = self.tokenizate_text(query)
+        id_bm25 = {doc_id: 0 for doc_id in self.cache_data.docmap}
+
+        for doc_id in self.cache_data.docmap:
+            for token in tokenized_query:
+                id_bm25[doc_id] += self.bm25(doc_id, token)
+
+        ranked = sorted(id_bm25.items(), key=lambda x: x[1], reverse=True)
+        print(ranked[:limit])
+        return ranked[:limit]
 
 def main() -> None:
     parser, args = create_parser()
@@ -212,7 +246,10 @@ def main() -> None:
     elif args.command == "bm25idf":
         invert.bm25_idf_command(args.term)
     elif args.command == "bm25tf":
-        invert.bm25_tf_command(args.id, args.term)
+        invert.bm25_tf_command(args.id, args.term, B=args.b, k1=args.k1)
+    elif args.command == "bm25search":
+        invert.bm25_search(args.query, args.limit)
+    
 
 
 
