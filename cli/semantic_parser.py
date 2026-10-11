@@ -12,7 +12,7 @@ def create_parser():
 
     embed_text.add_argument("query")
 
-    verify_embeddings = first_subparser.add_subparsers('verify_embedding')
+    verify_embeddings = first_subparser.add_parser('verify_embedding')
 
 
     args = parser.parse_args()

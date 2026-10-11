@@ -43,7 +43,7 @@ class SemanticSearch:
         except Exception:
             created_again = True
             self.build_embeddings(documents)
-        if length(self.embeddings) == len(documents):
+        if len(self.embeddings) == len(documents):
             return self.embeddings
 
         if not created_again:
@@ -55,7 +55,7 @@ class SemanticSearch:
 def verify_embeddings():
     semantic = SemanticSearch()
     try:
-        with open('cache/movies.json') as file:
+        with open('data/movies.json') as file:
             loaded_file = json.load(file)['movies']
     except Exception as e:
         print(e)
@@ -94,6 +94,6 @@ if __name__ == "__main__":
             exit(1)
         semantic.build_embeddings(loaded_file["movies"][:10])
     elif args.command == "embed_text":
-        embed_text(args.query)d
+        embed_text(args.query)
     elif args.command == "verify_embedding":
         verify_embeddings()
